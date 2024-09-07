@@ -2,8 +2,7 @@
 
 [![Build Status](https://github.com/NiklasBrunn/BoostingAutoEncoder.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/NiklasBrunn/BoostingAutoEncoder.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
-![BoostingAutoEncoder logo](logo/BoostingAutoEncoder_logo.jpg)
-<img src="logo/BoostingAutoEncoder_logo.jpg" alt="BoostingAutoEncoder logo" width="300">
+<img src="logo/BoostingAutoEncoder_logo.jpg" alt="BoostingAutoEncoder logo" width="500">
 
 
 A Julia package for training BoostingAutoencoders (BAEs) to single-cell gene expression and interaction data. 
