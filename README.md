@@ -12,3 +12,13 @@ using Pkg
 Pkg.add(url="https://github.com/NiklasBrunn/BoostingAutoEncoder.jl")
 using scVI 
 ```
+
+## ToDos:
+
+- [ ] Finish the documentation
+- [ ] Add unit tests 
+- [ ] Add the `timeBAE` function
+- [ ] Optimize data and model structures
+- [ ] Generalize and simplify visualization functions
+- [ ] Add option to differentiate through the componentwise boosting component
+- [ ] Update the README 
