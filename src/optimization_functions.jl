@@ -1,4 +1,5 @@
-#---Componentwise boosting functions:
+#---Optimization functions---#
+
 """
     get_unibeta(X::AbstractMatrix{T}, y::AbstractVector{T}, denom::AbstractVector{T}, n::Int, p::Int) where T
 
@@ -150,7 +151,6 @@ function disentangled_compL2Boost!(BAE::BoostingAutoencoder, batch::AbstractMatr
 
 end
 
-#---training function for a BAE with the disentanglement constraint:
 """
     train_BAE!(X::AbstractMatrix{T}, BAE::BoostingAutoencoder; 
               MD::Union{Nothing, MetaData}=nothing, 

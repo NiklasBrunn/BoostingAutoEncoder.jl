@@ -1,4 +1,5 @@
-#---functions for simulating data:
+#---Simulation functions---#
+
 function addstages!(X::AbstractMatrix{T}, stageno::Int; stagen::Int=1, stagep::Int=2, overlap::Int=1, blockprob::Number=1.0) where T
     curp = 1
     curn = 1

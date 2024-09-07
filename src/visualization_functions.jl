@@ -1,4 +1,4 @@
-#---Functions for result visualization:
+#---Visualization functions---#
 
 function vegaheatmap(Z::AbstractMatrix; 
     path::String=joinpath(@__DIR__, "../") * "heatmap.pdf", 

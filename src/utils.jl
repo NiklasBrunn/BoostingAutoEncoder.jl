@@ -1,4 +1,4 @@
-#---Utils:
+#---Utility functions---#
 
 # Data transformation:
 @inline function scale(X::AbstractArray{T}; corrected_std::Bool=true, dims::Int=1) where T
@@ -1379,5 +1379,3 @@ function load_CCIM_CtN(file_path::String; min_obs::Union{Int, Nothing}=20, min_f
 
     return X, X_st, MD
 end
-
-#ToDo: Add the option to keep track of the cell indices that are mapped by NICHES for later re-identifying them in the original data.

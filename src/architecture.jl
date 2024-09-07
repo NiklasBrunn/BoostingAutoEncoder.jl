@@ -1,4 +1,5 @@
-#---Hyperparameter:
+#---Model architecture structures and functions---#
+
 """
     mutable struct Hyperparameters
 
@@ -41,7 +42,6 @@ mutable struct Hyperparameters
     end 
 end
 
-#---MetaData:
 """
     mutable struct MetaData
 
@@ -81,7 +81,6 @@ mutable struct MetaData
     end 
 end
 
-#---BAE architecture:
 """
     mutable struct BoostingAutoencoder
 
