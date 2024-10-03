@@ -271,6 +271,32 @@ function get_important_genes(BAE::BoostingAutoencoder, MD::MetaData; save_data::
     return important_genes
 end
 
+#function get_topFeatures(BAE::BoostingAutoencoder, MD::MetaData)
+#    #Currently per latent dimension. Should it be updated such that top features per cluster are computed?
+#
+#    if isnothing(MD.featurename)
+#        @error "The metadata does not contain the feature names. Please provide the feature names."
+#    end
+#
+#    dict = Dict{Int, Vector{String}}();
+#
+#    for l in 1:size(BAE.coeffs, 2)
+#
+#        weights = abs.(BAE.coeffs[:, l])
+#        inds = sortperm(weights; rev=true)
+#        weights = weights[inds]
+#        sort_featurenames = MD.featurename[inds]
+#
+#        diffs = [weights[i] - weights[i+1] for i in 1:length(weights)-1]
+#        topGene_inds = findmax(diffs)[2]      
+#        sort_featurenames[1:topGene_inds]
+#
+#        dict[l] = sort_featurenames[1:topGene_inds]
+#    end
+#
+#    return dict
+#end
+
 
 # Visualization:
 function generate_umap(X::AbstractMatrix{T}; n_neighbors::Int=30, min_dist::Float64=0.4, seed::Int=42) where T

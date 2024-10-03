@@ -1,39 +1,29 @@
 #---Optimization functions---#
 
 """
-    get_unibeta(X::AbstractMatrix{T}, y::AbstractVector{T}, denom::AbstractVector{T}, n::Int, p::Int) where T
+    get_unibeta(X::AbstractMatrix{T}, y::AbstractVector{T}, denom::AbstractVector{T}) where T
 
-Compute the univariate regression coefficients for each feature/predictor.
+Compute univariate beta coefficients for a matrix of predictor variables and a response vector efficiently using matrix multiplication.
 
 # Arguments
-- `X::AbstractMatrix{T}`: A matrix of predictors with dimensions `n` by `p`, where `n` is the number of observations (rows) and `p` is the number offeatures/predictors (columns).
-- `y::AbstractVector{T}`: A vector of responses with length `n`.
-- `denom::AbstractVector{T}`: A vector of denominators with length `p`, typically corresponding to `n - 1` if the data is already feature standardized, or another value specific to each predictor (usually the feature/predicor variances).
-- `n::Int`: The number of observations (rows in `X` and elements in `y`).
-- `p::Int`: The number of features/predictors (columns in `X` and elements in `denom`).
+- `X::AbstractMatrix{T}`: A matrix of predictor variables of type `T` with dimensions `n` (rows, representing observations) by `p` (columns, representing features).
+- `y::AbstractVector{T}`: A vector of responses of type `T` with length `n`.
+- `denom::AbstractVector{T}`: A vector of denominators of type `T` with length `p`, corresponding to the denominators for each feature.
 
 # Returns
-- `unibeta::Vector{T}`: A vector of length `p` containing the univariate regression coefficients for each predictor.
+- `unibeta::Vector{T}`: A vector of length `p` containing the univariate beta coefficients for each feature. The coefficients are computed as the dot product between each feature column in `X` and the response vector `y`. They are divided by the corresponding element in `denom` if the denominator is non-zero. If the corresponding element in `denom` is zero, the coefficient is set to zero.
 
-# Description
-This function calculates the univariate regression coefficients for each predictor in `X` using the corresponding elements of the response vector `y`. For each predictor `j`, the coefficient is computed as the sum of the products of the predictor values and the response values across all observations, divided by the corresponding element in `denom`. The coefficient corresponds to the univariate ordinary linear least squares estimators.
-
-The univariate regression coefficient for predictor `j` is given by:
-
-    unibeta[j] = (sum(X[i, j] * y[i] for i in 1:n)) / denom[j]
+# Notes
+- This version uses matrix multiplication (`transpose(X) * y`) for efficient computation of the univariate beta coefficients.
+- The `denom .!= zero(T)` mask ensures that only valid divisions are performed where the denominator is non-zero.
 """
-function get_unibeta(X::AbstractMatrix{T}, y::AbstractVector{T}, denom::AbstractVector{T}, n::Int, p::Int) where T
-
-    unibeta = zeros(eltype(X), p)
-
-    for j = 1:p
-        for i = 1:n
-            unibeta[j] += X[i, j] * y[i]
-        end
-
-        unibeta[j] /= denom[j] #n - 1
-    end
-
+function get_unibeta(X::AbstractMatrix{T}, y::AbstractVector{T}, denom::AbstractVector{T}) where T
+    unibeta = transpose(X) * y
+    
+    mask = denom .!= zero(T)
+    unibeta[mask] ./= denom[mask]    
+    unibeta[.!mask] .= zero(T)    
+    
     return unibeta
 end
 
@@ -65,7 +55,6 @@ This function implements an iterative componentwise L2-boosting procedure for up
 - This function is intended to be used within the context of training a BAE.
 """
 function compL2Boost!(BAE::BoostingAutoencoder, l::Int, X::AbstractMatrix{T}, y::AbstractVector{T}, denom::AbstractVector{T}) where T
-    n, p = size(X)
 
     β = BAE.coeffs[:, l]
 
@@ -74,8 +63,7 @@ function compL2Boost!(BAE::BoostingAutoencoder, l::Int, X::AbstractMatrix{T}, y:
     for step in 1:BAE.HP.M
         res = y .- (X * β)
 
-        unibeta = get_unibeta(X, res, denom, n, p) # Currently the faster option
-        #unibeta = [dot(X[:, j], res) / denom[j] for j in 1:p] 
+        unibeta = get_unibeta(X, res, denom) 
 
         optindex = findmax(unibeta.^2 .* denom)[2]
 
@@ -297,6 +285,169 @@ function train_BAE!(X::AbstractMatrix{T}, BAE::BoostingAutoencoder; MD::Union{No
         end
 
         if iter < BAE.HP.n_restarts
+            @info "Re-initialize encoder weights as zeros ..."
+            BAE.coeffs = zeros(object_type, size(BAE.coeffs))
+        end
+
+    end
+
+    @info "Finished training. Computing results ..."
+
+    BAE.Z = get_latentRepresentation(BAE, Xt)
+
+
+    # Compute the cluster probabilities for each cell:
+    BAE.Z_cluster = softmax(split_vectors(BAE.Z))
+    cluster_labels = [argmax(BAE.Z_cluster[:, i]) for i in 1:size(BAE.Z_cluster, 2)]
+
+    # Compute average Silhouette score of the soft clustering results:
+    dist_mat = pairwise(Euclidean(), BAE.Z, dims=2);
+    silhouettes = Clustering.silhouettes(cluster_labels, dist_mat)
+
+    if !isnothing(MD)
+        MD.obs_df[!, :Cluster] = cluster_labels
+        MD.obs_df[!, :Silhouettes] = silhouettes
+        if isnothing(MD.Top_features)
+            MD.Top_features = topFeatures_per_Cluster(BAE, MD; save_data=save_data, data_path=data_path)
+        end
+    end
+
+
+    @info "Weight matrix sparsity level after the training: $(100 * count(x->x==0, BAE.coeffs) / length(BAE.coeffs))% (zero values).\n Silhouette score of the soft clustering: $(mean(silhouettes))."
+
+    output_dict = Dict{String, Union{Vector{eltype(X)}, Vector{Any}}}()
+    if save_data
+        output_dict["trainloss"] = mean_trainlossPerEpoch
+        output_dict["sparsity"] = sparsity_level
+        output_dict["entanglement"] = entanglement_score
+        output_dict["clustering"] = clustering_score
+        output_dict["silhouettes"] = silhouettes
+    end
+
+    if track_coeffs
+        output_dict["coefficients"] = coefficients
+    end
+
+
+    return output_dict
+end
+
+
+
+
+
+
+
+
+
+
+#ToDo: Updated training function:
+function train_BAE_X!(X::AbstractMatrix{T}, BAE::BoostingAutoencoder; MD::Union{Nothing, MetaData}=nothing, track_coeffs::Bool=false, save_data::Bool=false, data_path::Union{Nothing, String}=nothing, batchseed::Int=42) where T
+
+    Random.seed!(batchseed)
+
+    object_type = eltype(X)
+
+    if object_type != Float32
+        @warn "The input data matrix is not of type Float32. This might lead to a slower training process."
+    end
+
+    if isnothing(MD)
+        @warn "No metadata object provided. Clustering results and feature selection will not be stored."
+    end
+
+    if save_data
+        if isnothing(data_path) || !isdir(data_path)
+            @error "Please provide a valid path to save the training data."
+        else
+            if !isdir(data_path * "BAE_results_data")
+                mkdir(data_path * "BAE_results_data")
+            end
+            data_path = data_path * "BAE_results_data/"
+        end
+    end
+
+    BAE.HP.ϵ = convert(object_type, BAE.HP.ϵ)
+    BAE.HP.η = convert(object_type, BAE.HP.η)
+    BAE.HP.λ = convert(object_type, BAE.HP.λ)
+
+    Xt = X'
+    n = size(X, 1)
+
+    @info "Training BAE for $(BAE.HP.n_runs) runs for a maximum number of $(BAE.HP.max_iter) epochs per run and a batchsize of $(BAE.HP.batchsize), i.e., a maximum of $(Int(round(BAE.HP.max_iter * n / BAE.HP.batchsize))) update iterations per run will be performed."
+
+    opt = ADAMW(BAE.HP.η, (0.9, 0.999), BAE.HP.λ)
+    opt_state = Flux.setup(opt, BAE.decoder)
+    
+    mean_trainlossPerEpoch = []
+    sparsity_level = []
+    entanglement_score = []
+    clustering_score = []
+    coefficients = []
+
+    errors = [Inf]
+
+    for run in 1:BAE.HP.n_runs
+
+        @info "Training run: $run/$(BAE.HP.n_runs) ..."
+
+        @showprogress for epoch in 1:BAE.HP.max_iter
+
+            loader = Flux.Data.DataLoader(Xt, batchsize=BAE.HP.batchsize, shuffle=true) 
+
+            batchLosses = Float32[]
+            for batch in loader
+
+                batch_t = batch'
+                Z = get_latentRepresentation(BAE, batch)
+                
+                batchLoss, grads = Flux.withgradient(BAE.decoder, Z) do m, z 
+                    X̂ = m(z)
+                    Flux.mse(X̂, batch)
+                end
+                push!(batchLosses, batchLoss)
+
+                disentangled_compL2Boost!(BAE, batch_t, grads[2])
+                Flux.update!(opt_state, BAE.decoder, grads[1])
+
+                if track_coeffs && (run == BAE.HP.n_runs)
+                    push!(coefficients, copy(BAE.coeffs))
+                end
+
+            end
+
+            if save_data #&& epoch % 10 == 0
+                push!(mean_trainlossPerEpoch, mean(batchLosses))
+                push!(sparsity_level, 1 - (count(x->x!=0, BAE.coeffs) / length(BAE.coeffs))) # Percentage of zero elements in the encoder weight matrix (higher values are better)
+                Z = get_latentRepresentation(BAE, Xt)
+                push!(entanglement_score, sum(UpperTriangular(abs.(cor(Z, dims=2)))) - convert(object_type, BAE.HP.zdim)) # Offdiagonal of the Pearson correlation coefficient (upper triangular) matrix between the latent dimensions (closer to 0 is better)
+                Z_cluster = softmax(split_vectors(Z))
+                push!(clustering_score, n - sum([maximum(Z_cluster[:, i]) for i in 1:n])) # Sum of deviations of the maximum cluster probability value per cell from 1 (closer to 0 is better)
+
+
+                file_path = data_path * "/BAE_coeffs.txt"
+                writedlm(file_path, BAE.coeffs)
+                file_path = data_path * "/Trainloss_BAE.txt"
+                writedlm(file_path, mean_trainlossPerEpoch)
+                file_path = data_path * "/Sparsity_BAE.txt"
+                writedlm(file_path, sparsity_level)
+                file_path = data_path * "/Entanglement_BAE.txt"
+                writedlm(file_path, entanglement_score)
+                file_path = data_path * "/ClusteringScore_BAE.txt"
+                writedlm(file_path, clustering_score)
+            end
+
+            push!(errors, mean(batchLosses))
+            if !isnothing(BAE.HP.tol)
+                if abs.(errors[end] - errors[end-1]) < BAE.HP.tol 
+                    @info "Converged in run $run after $epoch epochs, i.e., $(Int(round(epoch * n / BAE.HP.batchsize))) update iterations."
+                    break
+                end
+            end
+
+        end
+
+        if run < BAE.HP.n_runs
             @info "Re-initialize encoder weights as zeros ..."
             BAE.coeffs = zeros(object_type, size(BAE.coeffs))
         end

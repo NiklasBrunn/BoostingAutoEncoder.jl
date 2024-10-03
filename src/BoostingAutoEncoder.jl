@@ -28,10 +28,10 @@ include("simulation_functions.jl");
 #--- Exported functions ---#
 export 
     # BAE model architecture:
-    Hyperparameters, MetaData, BoostingAutoencoder, generate_BAEdecoder,
+    Hyperparameters, MetaData, BoostingAutoencoder, generate_BAEdecoder, Hyperparameters_X,
 
     # BAE model optimization functions:
-    get_unibeta, compL2Boost!, disentangled_compL2Boost!, train_BAE!, 
+    get_unibeta, compL2Boost!, disentangled_compL2Boost!, train_BAE!, train_BAE_X!,
 
     # plotting functions:
     vegaheatmap, vegascatterplot, create_colored_vegascatterplots, TopFeaturesPerCluster_scatterplot, 
