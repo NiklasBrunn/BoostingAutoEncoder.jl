@@ -20,7 +20,7 @@ The package can be downloaded from this GitHub repository and added with the Jul
 ```julia
 using Pkg 
 Pkg.add(url="https://github.com/NiklasBrunn/BoostingAutoEncoder.jl")
-using scVI 
+using BoostingAutoEncoder
 ```
 
 
